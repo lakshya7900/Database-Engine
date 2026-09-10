@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(minidb
     src/main.cpp
+    src/record_io.cpp
 )
 
 target_include_directories(minidb PRIVATE include)
