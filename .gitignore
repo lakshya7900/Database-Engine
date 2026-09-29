@@ -2,7 +2,6 @@ build/
 build-bench/
 *.o
 *.out
-minidb
 .vscode/
 .DS_Store
 
