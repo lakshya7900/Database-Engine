@@ -1,0 +1,70 @@
+MINIDB — ENGINEERING LOG (COMPLETED PORTFOLIO-SCALE VERSION)
+============================================================
+
+STACK
+-----
+C++20, CMake, CTest, binary file I/O.
+
+LAYERS BUILT
+------------
+1. Record model
+2. Binary serializer/deserializer
+3. 4096-byte slotted page
+4. Page compaction and slot reuse
+5. Disk manager
+6. Table/heap-file abstraction
+7. RID addressing: (pageId, slotId)
+8. In-memory primary-key index rebuilt at startup
+9. SQL-like CRUD parser/REPL
+10. Automated tests
+
+RECORD FORMAT
+-------------
+[id:int32][nameLength:uint32][name:N bytes][age:int32][score:int32]
+Serialized size = 16 + name.length() bytes.
+
+PAGE FORMAT
+-----------
+PAGE_SIZE = 4096 bytes.
+Header = slotCount:uint16 + freeSpaceOffset:uint16 = 4 bytes.
+Slot = recordOffset:uint16 + recordLength:uint16 = 4 bytes.
+Records grow forward; slot directory grows backward.
+Deleted slots use length=0; deletion compacts live bytes; slots are reused.
+
+DISK FORMAT
+-----------
+Contiguous sequence of 4096-byte pages.
+Physical page address = pageId * 4096.
+
+TABLE / LOOKUP
+--------------
+Physical address = RID{pageId, slotId}.
+Startup scans persisted pages and rebuilds unordered_map<int32_t, RID>.
+Point lookup after startup: average O(1) hash lookup + one page read.
+Full scan: O(number of stored records/pages).
+
+OPERATIONS
+----------
+INSERT, SELECT by id, SELECT all/scan, UPDATE, DELETE, .stats.
+
+SAFE RESUME FACTS
+-----------------
+- Built a C++20 mini database/storage engine from scratch.
+- Designed explicit binary serialization for fixed-width fields and variable-length strings.
+- Implemented 4 KB slotted pages, tombstone deletion, compaction, and slot reuse.
+- Added persistent page I/O and page/slot RID addressing.
+- Added an in-memory primary-key hash index rebuilt from persisted pages.
+- Supports insert, point lookup, full scan, update, delete, and a SQL-like CLI.
+- Added CMake/CTest coverage for serialization, page behavior, persistence, CRUD, and parsing.
+
+DO NOT CLAIM
+------------
+ACID, WAL, crash recovery, concurrency control, B+ tree indexing, buffer pool,
+query optimizer, joins, full SQL compliance, production readiness.
+
+RESUME BULLET DIRECTION
+-----------------------
+Built a C++20 mini database engine implementing binary record serialization,
+4 KB slotted pages, page compaction, persistent heap-file storage, and RID-based
+record addressing; added an in-memory primary-key index for average O(1) point
+lookup after startup plus a SQL-like CRUD interface.

@@ -1,40 +1,97 @@
-#include <fstream>
+#include "minidb/parser.hpp"
+#include "minidb/table.hpp"
+#include <iomanip>
 #include <iostream>
-#include <vector>
-#include <optional>
+#include <string>
+#include <type_traits>
+#include <variant>
 
-#include "record.hpp"
-#include "record_io.hpp"
+namespace {
 
-int main() {
-    // WRITE RECORDS
-    // std::vector<Record> records = {
-    //     {0, "Atharv", 19, 100},
-    //     {1, "Sahaj", 20, 10},
-    //     {2, "Anirudh", 21, 99},
-    //     {3, "Lakshya", 20, 1256},
-    //     {4, "Laksh", 23, 12345678}
-    // };
-    // std::ofstream file("data.db", std::ios::binary);
+void printRecord(const minidb::Record& record) {
+    std::cout << std::left
+              << std::setw(8) << record.id
+              << std::setw(24) << record.name
+              << std::setw(8) << record.age
+              << record.score << '\n';
+}
 
-    // writeRecords(file, records);
+void printHeader() {
+    std::cout << std::left
+              << std::setw(8) << "id"
+              << std::setw(24) << "name"
+              << std::setw(8) << "age"
+              << "score\n"
+              << std::string(52, '-') << '\n';
+}
 
-    // READ RECORD
-    std::uint32_t recordIndex = 100;
-    std::ifstream file("data.db", std::ios::binary);
-    
-    std::optional<Record> record = readRecortAt(file, recordIndex);
+} // namespace
 
-    if (record) {
-        std::cout << "Id: " << record->id << std::endl;
-        std::cout << "Name: " << record->name << std::endl;
-        std::cout << "Age: " << record->age << std::endl;
-        std::cout << "Score: " << record->score << std::endl;
-    } else {
-        std::cout << "No record found with index " << recordIndex << std::endl;
+int main(int argc, char** argv) {
+    std::string dbPath = "data/minidb.db";
+    if (argc >= 2) dbPath = argv[1];
+
+    minidb::Table table(dbPath);
+    if (!table.isReady()) {
+        std::cerr << "Failed to open or recover database: " << dbPath << '\n';
+        return 1;
     }
 
-    file.close();
+    std::cout << "MiniDB ready: " << dbPath << "\nType .help for commands.\n";
+    std::string line;
 
+    while (true) {
+        std::cout << "minidb> ";
+        if (!std::getline(std::cin, line)) break;
+
+        const auto parsed = minidb::parseCommand(line);
+        if (!parsed.command) {
+            std::cout << "Error: " << parsed.error << '\n';
+            continue;
+        }
+
+        bool shouldExit = false;
+
+        std::visit([&](const auto& command) {
+            using T = std::decay_t<decltype(command)>;
+
+            if constexpr (std::is_same_v<T, minidb::InsertCommand>) {
+                std::cout << (table.insert(command.record) ? "Inserted.\n"
+                    : "Insert failed (duplicate id, oversized record, or I/O error).\n");
+            } else if constexpr (std::is_same_v<T, minidb::SelectAllCommand>) {
+                const auto records = table.scan();
+                printHeader();
+                for (const auto& record : records) printRecord(record);
+                std::cout << records.size() << " row(s).\n";
+            } else if constexpr (std::is_same_v<T, minidb::SelectByIdCommand>) {
+                auto record = table.get(command.id);
+                if (!record) {
+                    std::cout << "No record with id " << command.id << ".\n";
+                    return;
+                }
+                printHeader();
+                printRecord(*record);
+            } else if constexpr (std::is_same_v<T, minidb::DeleteCommand>) {
+                std::cout << (table.erase(command.id) ? "Deleted.\n"
+                    : "No record with that id.\n");
+            } else if constexpr (std::is_same_v<T, minidb::UpdateCommand>) {
+                std::cout << (table.update(command.id, command.replacement) ? "Updated.\n"
+                    : "Update failed.\n");
+            } else if constexpr (std::is_same_v<T, minidb::StatsCommand>) {
+                const auto stats = table.stats();
+                std::cout << "records: " << stats.recordCount << '\n'
+                          << "pages: " << stats.pageCount << '\n'
+                          << "page_size: " << minidb::PAGE_SIZE << " bytes\n"
+                          << "file_size: " << stats.fileBytes << " bytes\n"
+                          << "logical_record_bytes: " << stats.logicalRecordBytes << " bytes\n";
+            } else if constexpr (std::is_same_v<T, minidb::HelpCommand>) {
+                std::cout << minidb::helpText();
+            } else if constexpr (std::is_same_v<T, minidb::ExitCommand>) {
+                shouldExit = true;
+            }
+        }, *parsed.command);
+
+        if (shouldExit) break;
+    }
     return 0;
 }

@@ -1,4 +1,12 @@
 build/
+build-bench/
 *.o
+*.out
 minidb
-.vscode
+.vscode/
+.DS_Store
+
+data/*.db
+benchmark_*.db
+benchmark_results.csv
+benchmark_run_*.txt
